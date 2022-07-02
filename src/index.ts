@@ -93,4 +93,4 @@ const run = async () => {
     await connectToSearchStream(twitterClient);
 }
 
-run();
+void run();

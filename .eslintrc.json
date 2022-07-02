@@ -4,13 +4,17 @@
         "es2021": true,
         "node": true
     },
-    "extends": ["eslint:recommended", "plugin:react/recommended", "plugin:react-hooks/recommended", "prettier"],
+    "extends": [
+        "eslint:recommended",
+        "prettier"
+    ],
     "overrides": [
         {
             "files": ["*.ts", "*.tsx"],
             "extends": [
                 "plugin:@typescript-eslint/recommended",
-                "plugin:@typescript-eslint/recommended-requiring-type-checking"
+                "plugin:@typescript-eslint/recommended-requiring-type-checking",
+                "prettier"
             ],
             "rules": {
                 "@typescript-eslint/no-non-null-assertion": 0
@@ -22,7 +26,8 @@
         "ecmaFeatures": {
             "jsx": true
         },
-        "ecmaVersion": "latest"
+        "ecmaVersion": "latest",
+        "project": ["./tsconfig.json"]
     },
-    "plugins": ["react", "@typescript-eslint"]
+    "plugins": ["@typescript-eslint"]
 }

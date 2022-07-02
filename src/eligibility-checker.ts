@@ -11,9 +11,11 @@ export class EligibilityChecker {
     private addressesDescriptor: number | undefined;
     private authorIdsDescriptor: number | undefined;
 
-    constructor(private readonly saveLocation: string) { }
+    constructor(private readonly saveDirectory: string) { }
 
     async init() {
+        await fs.ensureDir(this.saveDirectory);
+
         this.addresses = await this.initSeen(addressesFile);
         this.authorIds = await this.initSeen(authorIdsFile);
 
@@ -22,38 +24,52 @@ export class EligibilityChecker {
     }
 
     async checkValidity(address: string, authorId: string) {
-        if (this.addresses!.has(address)) {
+        if (this.addresses == undefined || this.authorIds == undefined || this.addressesDescriptor == undefined || this.authorIdsDescriptor == undefined) {
+            throw new Error("Must call init() before using EligibilityChecker");
+        }
+
+        if (this.addresses.has(address)) {
             return false;
         }
 
-        if (this.authorIds!.has(authorId)) {
+        if (this.authorIds.has(authorId)) {
             return false;
         }
 
-        await this.writeLineToStream(address, this.addressesDescriptor!);
-        this.addresses!.add(address);
+        await this.writeLineToStream(address, this.addressesDescriptor);
+        this.addresses.add(address);
 
-        await this.writeLineToStream(authorId, this.authorIdsDescriptor!);
-        this.authorIds!.add(authorId);
+        await this.writeLineToStream(authorId, this.authorIdsDescriptor);
+        this.authorIds.add(authorId);
 
         return true;
     }
 
+    dispose() {
+        if (this.addressesDescriptor != undefined) {
+            fs.closeSync(this.addressesDescriptor);
+        }
+
+        if (this.authorIdsDescriptor != undefined) {
+            fs.closeSync(this.authorIdsDescriptor)
+        }
+    }
+
     private async initSeen(fileName: string) {
-        const filePath = path.resolve(this.saveLocation, fileName);
-        const text = await fs.readFile(filePath, encoding);
+        const filePath = path.resolve(this.saveDirectory, fileName);
+        const text = await fs.readFile(filePath, { encoding, flag: "a+" });
         const split = text.split("\n");
         return new Set(split);
     }
 
     private async getAppendableDescriptor(fileName: string) {
-        const filePath = path.resolve(this.saveLocation, fileName);
+        const filePath = path.resolve(this.saveDirectory, fileName);
         return await fs.open(filePath, "a+");
     }
 
     private async writeLineToStream(line: string, descriptor: number) {
-        fs.appendFile(descriptor, line, { encoding });
-        fs.appendFile("\n", line, { encoding });
+        await fs.appendFile(descriptor, line, { encoding });
+        await fs.appendFile(descriptor, "\n", { encoding });
         await fs.fdatasync(descriptor);
     }
 }
