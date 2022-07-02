@@ -1,6 +1,10 @@
+import os from "os";
+import path from "path";
 import { Client } from "twitter-api-sdk";
 import { searchStream, TwitterResponse } from "twitter-api-sdk/dist/types";
 import yargs from "yargs";
+import { EligibilityChecker } from "./eligibility-checker";
+import { Sender } from "./sender";
 
 type AddRule = {
     tag?: string | undefined;
@@ -38,11 +42,7 @@ const validateStreamRules = async (client: Client) => {
     }
 }
 
-const checkEligibility = (address: string, authorId: string) => {
-    return true;
-}
-
-const handleTweet = (tweet: TwitterResponse<searchStream>) => {
+const handleTweet = async (tweet: TwitterResponse<searchStream>, eligibilityChecker: EligibilityChecker, sender: Sender) => {
     console.log("received tweet", tweet);
     if (tweet.data == undefined) {
         console.log("Tweet ignored, missing data field")
@@ -63,19 +63,22 @@ const handleTweet = (tweet: TwitterResponse<searchStream>) => {
         return;
     }
 
-    const isEligible = checkEligibility(address, authorId);
+    const isEligible = await eligibilityChecker.checkValidity(address, authorId);
     if (!isEligible) {
-        console.log("Tweet ignored, Twitter user and/or address has already been used", tweet.data.id)
+        console.log("Tweet ignored, user and/or address has already been airdropped", tweet.data.id)
+        return;
     }
 
-    console.log("Sending SDOGE to", address);
+    console.log("Sending to", address);
+
+    await sender.send(address);
 }
 
-const connectToSearchStream = async (client: Client) => {
+const connectToSearchStream = async (client: Client, eligibilityChecker: EligibilityChecker, sender: Sender) => {
     const searchStream = client.tweets.searchStream({ expansions: ["author_id"] });
     console.log("Awaiting tweets...")
     for await (const tweet of searchStream) {
-        handleTweet(tweet);
+        await handleTweet(tweet, eligibilityChecker, sender);
     }
 }
 
@@ -83,14 +86,32 @@ const run = async () => {
     const argv = await yargs(process.argv.slice(2))
         .alias("t", "token")
         .describe("t", "Your app's Twitter API bearer token")
-        .demandOption(["t"])
+
+        .alias("n", "network")
+        .describe("n", "The address of the EVM-compatible network to which to connect")
+
+        .alias("k", "private-key")
+        .describe("k", "The private key of the account from which to airdrop")
+
+        .alias("a", "amount")
+        .describe("a", "The amount of currency to airdrop per request")
+        .default("a", "1")
+
+        .demandOption(["t", "k", "n"])
         .argv;
 
-    console.log(argv.t);
+    let key = argv.k as string;
+    key = key.startsWith("0x") ? key.slice(2) : key;
 
     const twitterClient = new Client(argv.t as string);
+
+    const eligibilityChecker = new EligibilityChecker(path.resolve(os.homedir(), ".c-130"));
+    await eligibilityChecker.init();
+
+    const sender = new Sender(argv.n as string, key, argv.a);
+
     await validateStreamRules(twitterClient);
-    await connectToSearchStream(twitterClient);
+    await connectToSearchStream(twitterClient, eligibilityChecker, sender);
 }
 
 void run();
